@@ -1,0 +1,128 @@
+# 剧本三: 打回熔断与人工裁决 —— 连续 3 次打回触发熔断冻结, 主程恢复后通过
+name: 限流中间件 · 熔断与裁决 (演练剧本)
+description: 验证熔断器与 resume 裁决链路; vat-core e2e 测试夹具。
+steps:
+  - when: { role: PM, ticketType: requirement }
+    thought: 拆解需求, 下发 DEV。
+    action: 完成 PRD 并下发任务单。
+    tickets:
+      - to: DEV
+        type: task
+        title: "[开发任务] 令牌桶限流器"
+        body: "按 PRD 实现令牌桶限流器。"
+    deliverable:
+      title: PRD 规格书 (演练)
+      type: spec
+      content: |
+        # PRD (演练)
+        实现令牌桶限流器。
+  - when: { role: DEV, ticketType: task }
+    thought: 初版实现。
+    action: 提交实现。
+    tickets:
+      - to: REVIEW
+        type: review
+        title: "[代码评审申请] 令牌桶限流器"
+        body: "请审查实现。"
+    deliverable:
+      title: 实现 (演练)
+      type: code
+      content: |
+        export class TokenBucket { /* v1 */ }
+  - when: { role: REVIEW, ticketType: review }
+    thought: 并发窗口缺陷, 打回 (1/3)。
+    action: 打回。
+    tickets:
+      - to: DEV
+        type: return
+        title: "[打回 1/3] 并发窗口缺陷"
+        body: "问题: acquire 非原子。要求: 补原子性保证。"
+  - when: { role: DEV, ticketType: return }
+    thought: 修复并发窗口。
+    action: 修复并再次提审。
+    tickets:
+      - to: REVIEW
+        type: review
+        title: "[二次提审] 令牌桶限流器"
+        body: "并发窗口已修复。"
+    deliverable:
+      title: 实现 v2 (演练)
+      type: code
+      content: |
+        export class TokenBucket { /* v2 */ }
+  - when: { role: REVIEW, ticketType: review }
+    thought: 时钟回拨缺陷, 打回 (2/3)。
+    action: 打回。
+    tickets:
+      - to: DEV
+        type: return
+        title: "[打回 2/3] 时钟回拨缺陷"
+        body: "问题: Date.now 回拨导致令牌倒扣。要求: 单调时钟。"
+  - when: { role: DEV, ticketType: return }
+    thought: 改用单调时钟。
+    action: 修复并第三次提审。
+    tickets:
+      - to: REVIEW
+        type: review
+        title: "[三次提审] 令牌桶限流器"
+        body: "时钟回拨已修复。"
+    deliverable:
+      title: 实现 v3 (演练)
+      type: code
+      content: |
+        export class TokenBucket { /* v3 */ }
+  - when: { role: REVIEW, ticketType: review }
+    thought: 精度缺陷, 打回 (3/3) —— 触发熔断。
+    action: 打回。
+    tickets:
+      - to: DEV
+        type: return
+        title: "[打回 3/3] 精度缺陷"
+        body: "问题: 亚毫秒精度丢失。要求: 性能.now。"
+  - when: { role: DEV, ticketType: return }
+    thought: 按主程裁决意见完成终版修复。
+    action: 终版提审。
+    tickets:
+      - to: REVIEW
+        type: review
+        title: "[终版提审] 令牌桶限流器"
+        body: "精度缺陷已修复。"
+    deliverable:
+      title: 实现 v4 终版 (演练)
+      type: code
+      content: |
+        export class TokenBucket { /* v4 final */ }
+  - when: { role: REVIEW, ticketType: review }
+    thought: 全项通过, 准入。
+    action: 签发准入。
+    tickets:
+      - to: QA
+        type: review
+        title: "[评审通过] 令牌桶限流器准入测试"
+        body: "三项历史打回问题均已修复, 请验收。"
+    deliverable:
+      title: 终审准入报告 (演练)
+      type: review
+      content: |
+        # 终审报告
+        三项历史打回问题均已修复, 准入。
+  - when: { role: QA, ticketType: review }
+    thought: 验收通过, 签发。
+    action: 通知 PM 结项。
+    deliverable:
+      title: QA 验收报告 (演练)
+      type: test
+      content: |
+        # 质量验收报告
+        回归通过 (演练剧本预置)。
+    tickets:
+      - to: PM
+        type: notify
+        title: "[测试准出] 限流中间件 (熔断裁决后交付)"
+        body: "## 质量准出通知\n- 主程裁决后全链路通过。"
+  - when: { role: PM, ticketType: notify }
+    thought: 收到准出通知, 归档结项。
+    action: 归档卡片, 交付完成。
+  - when: { role: DEV, ticketType: notify }
+    thought: 收到主程熔断裁决意见, 记入 lessons。
+    action: 确认裁决, 按意见修复。

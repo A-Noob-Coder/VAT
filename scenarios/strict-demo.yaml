@@ -1,0 +1,141 @@
+# 剧本四: strict 闸门演示 —— scripted 驱动 + 真实 tsc/vitest 执行
+# 用法: vat run --mode strict --scenario scenarios/strict-demo.yaml
+# DEV 产出的代码会被 StrictRunner 真实编译与测试; 测试报告来自真实运行输出。
+name: 令牌桶限流中间件 · strict 闸门演示 (剧本)
+description: 无 API Key 演示 strict 模式 —— 代码真实过编译与测试闸门。
+steps:
+  - when: { role: PM, ticketType: requirement }
+    thought: 拆解需求, 下发 DEV。
+    action: 完成 PRD 并下发任务单。
+    tickets:
+      - to: DEV
+        type: task
+        title: "[开发任务] 令牌桶限流中间件"
+        body: "实现线程安全令牌桶, 附单元测试; strict 闸门将真实执行验证。"
+    deliverable:
+      title: PRD 规格书 (strict 演示)
+      type: spec
+      content: |
+        # PRD
+        实现令牌桶限流器; 验收准则: 容量约束 / 超量拒绝 / 非法配置报错。
+  - when: { role: DEV, ticketType: task }
+    thought: 产出真实工程文件 (源码 + 单测 + 依赖声明), 提交 strict 闸门验证。
+    action: 写入工程文件并提审, 等待真实编译与测试。
+    codeFiles:
+      - path: package.json
+        content: |
+          {
+            "name": "vat-strict-demo",
+            "private": true,
+            "type": "module",
+            "devDependencies": {
+              "typescript": "^5.0.0",
+              "vitest": "^3.2.0"
+            }
+          }
+      - path: src/token-bucket.ts
+        content: |
+          export interface TokenBucketConfig {
+            capacity: number;
+            refillPerSec: number;
+          }
+
+          export class TokenBucket {
+            private tokens: number;
+            private last = Date.now();
+
+            constructor(private readonly config: TokenBucketConfig) {
+              if (config.capacity <= 0 || config.refillPerSec <= 0) {
+                throw new Error('InvalidConfig: capacity/refillPerSec must be positive');
+              }
+              this.tokens = config.capacity;
+            }
+
+            acquire(n = 1): boolean {
+              const now = Date.now();
+              this.tokens = Math.min(
+                this.config.capacity,
+                this.tokens + ((now - this.last) / 1000) * this.config.refillPerSec
+              );
+              this.last = now;
+              if (this.tokens >= n) {
+                this.tokens -= n;
+                return true;
+              }
+              return false;
+            }
+
+            get available(): number {
+              return Math.floor(this.tokens);
+            }
+          }
+      - path: src/token-bucket.test.ts
+        content: |
+          import { describe, it, expect } from 'vitest';
+          import { TokenBucket } from './token-bucket.js';
+
+          describe('TokenBucket', () => {
+            it('容量内放行, 超量拒绝', () => {
+              const b = new TokenBucket({ capacity: 2, refillPerSec: 0.001 });
+              expect(b.acquire(2)).toBe(true);
+              expect(b.acquire(1)).toBe(false);
+            });
+            it('非法配置抛错', () => {
+              expect(() => new TokenBucket({ capacity: 0, refillPerSec: 1 })).toThrow();
+            });
+          });
+    deliverable:
+      title: "生产级源码: TokenBucket (strict)"
+      type: code
+      content: |
+        源码与单测已提交 projects/, 由 StrictRunner 真实编译并执行测试。
+    tickets:
+      - to: REVIEW
+        type: review
+        title: "[代码评审申请] 令牌桶限流中间件"
+        body: "已通过 strict 闸门 (真实 tsc + vitest), 请架构审查。"
+  - when: { role: REVIEW, ticketType: review }
+    thought: 复核 strict 闸门报告与实现, 准入。
+    action: 签发准入, 流转 QA。
+    tickets:
+      - to: QA
+        type: review
+        title: "[评审通过] 令牌桶限流中间件准入测试"
+        body: "类型与单测已由闸门真实验证, 请追加边界测试。"
+    deliverable:
+      title: 架构审计报告 (strict 演示)
+      type: review
+      content: |
+        # 审计报告
+        StrictRunner 报告确认真实编译与测试通过; 实现结构清晰, 准入。
+  - when: { role: QA, ticketType: review }
+    thought: 在真实工程上追加边界 fuzz 测试, 由闸门再次真实执行。
+    action: 追加 fuzz 测试并重新过闸门, 通过后签发。
+    codeFiles:
+      - path: src/token-bucket.qa.test.ts
+        content: |
+          import { describe, it, expect } from 'vitest';
+          import { TokenBucket } from './token-bucket.js';
+
+          describe('TokenBucket 边界 fuzz', () => {
+            it('10,000 次快速调用绝不超发', () => {
+              const b = new TokenBucket({ capacity: 10, refillPerSec: 1 });
+              let granted = 0;
+              for (let i = 0; i < 10_000; i++) if (b.acquire(1)) granted += 1;
+              expect(granted).toBeLessThanOrEqual(10);
+            });
+          });
+    deliverable:
+      title: QA 验收报告 (strict 演示)
+      type: test
+      content: |
+        # 验收报告
+        追加边界 fuzz 测试由 StrictRunner 真实执行, 结果见闸门报告。
+    tickets:
+      - to: PM
+        type: notify
+        title: "[测试准出] 令牌桶限流中间件交付签发"
+        body: "真实测试全部通过, 建议结项。"
+  - when: { role: PM, ticketType: notify }
+    thought: 收到准出通知, 归档结项。
+    action: 归档卡片, 交付完成。

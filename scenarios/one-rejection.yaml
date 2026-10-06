@@ -1,0 +1,96 @@
+# 剧本二: 一次打回与自愈 —— REVIEW 首轮打回, DEV 修复后二次提审通过
+name: 限流中间件 · 一次打回 (演练剧本)
+description: 验证打回-修复-再评审链路; vat-core e2e 测试夹具。
+steps:
+  - when: { role: PM, ticketType: requirement }
+    thought: 拆解需求, 下发 DEV。
+    action: 完成 PRD 并下发任务单。
+    tickets:
+      - to: DEV
+        type: task
+        title: "[开发任务] 令牌桶限流器"
+        body: "按 PRD 实现令牌桶限流器。"
+    deliverable:
+      title: PRD 规格书 (演练)
+      type: spec
+      content: |
+        # PRD (演练)
+        实现令牌桶限流器, 附完整验收准则。
+  - when: { role: DEV, ticketType: task }
+    thought: 首轮实现遗漏了 refillPerSec 边界校验。
+    action: 提交初版实现。
+    tickets:
+      - to: REVIEW
+        type: review
+        title: "[代码评审申请] 令牌桶限流器"
+        body: "请审查初版实现。"
+    deliverable:
+      title: 初版实现 (演练)
+      type: code
+      content: |
+        export class TokenBucket { /* 初版: 未校验 refillPerSec <= 0 */ }
+  - when: { role: REVIEW, ticketType: review }
+    thought: 发现非零校验缺失, 打回。
+    action: 出具打回单 (第 1 次退回)。
+    tickets:
+      - to: DEV
+        type: return
+        title: "[打回] 缺少 refillPerSec 非零校验"
+        body: |
+          ## 评审打回意见 (第 1/3 次)
+          - 问题: refillPerSec <= 0 未拦截
+          - 要求: 补全参数校验与对应用例
+    memoryUpdates:
+      newLesson:
+        issue: 配置参数校验遗漏导致打回
+        avoidance: 提审前对照 PRD 验收准则逐项自查。
+  - when: { role: DEV, ticketType: return }
+    thought: 补全校验, 重新提审。
+    action: 修复后二次提审。
+    tickets:
+      - to: REVIEW
+        type: review
+        title: "[二次提审] 令牌桶限流器"
+        body: "打回项已修复, 请复审。"
+    deliverable:
+      title: 修复版实现 (演练)
+      type: code
+      content: |
+        export class TokenBucket {
+          constructor(capacity: number, refillPerSec: number) {
+            if (capacity <= 0 || refillPerSec <= 0) throw new Error('InvalidConfig');
+          }
+        }
+  - when: { role: REVIEW, ticketType: review }
+    thought: 复审通过。
+    action: 签发准入, 流转 QA。
+    tickets:
+      - to: QA
+        type: review
+        title: "[评审通过] 令牌桶限流器准入测试"
+        body: "打回项已修复, 准入, 请验收。"
+    deliverable:
+      title: 复审准入报告 (演练)
+      type: review
+      content: |
+        # 复审报告
+        打回项已修复, 准入。
+  - when: { role: QA, ticketType: review }
+    thought: 回归通过, 签发。
+    action: 出具验收报告并通知 PM。
+    deliverable:
+      title: QA 验收报告 (演练)
+      type: test
+      content: |
+        # 质量验收报告
+        回归 12/12 通过 (演练剧本预置)。
+    tickets:
+      - to: PM
+        type: notify
+        title: "[测试准出] 限流中间件 (一次打回后通过)"
+        body: |
+          ## 质量准出通知
+          - 打回项已验证修复 (演练剧本预置)。
+  - when: { role: PM, ticketType: notify }
+    thought: 收到准出通知, 归档结项。
+    action: 归档卡片, 交付完成。

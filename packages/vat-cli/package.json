@@ -1,0 +1,18 @@
+{
+  "name": "@vat/cli",
+  "version": "0.2.0",
+  "type": "module",
+  "bin": {
+    "vat": "./dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@vat/core": "*",
+    "@vat/providers": "*",
+    "@vat/strict": "*",
+    "commander": "^14.0.0"
+  }
+}

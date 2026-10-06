@@ -1,0 +1,104 @@
+# 剧本一: 黄金路径 —— 需求 → PRD → 编码 → 评审通过 → QA 签发 (无打回)
+name: 令牌桶限流中间件 · 黄金路径 (演练剧本)
+description: 演示 VAT 流水线的一次完整无摩擦交付; 同时作为 vat-core e2e 测试夹具。
+steps:
+  - when: { role: PM, ticketType: requirement }
+    thought: "拆解需求: 高并发令牌桶限流中间件。核心是恒定时间令牌补充与突发流量缓冲, 明确 QPS 指标与单测准出标准, 下发 DEV。"
+    action: 完成 PRD 规格书并下发开发任务单。
+    tickets:
+      - to: DEV
+        type: task
+        title: "[开发任务] 令牌桶限流中间件"
+        body: |
+          ## 开发指导书
+          - 按 PRD 实现线程安全令牌桶, 附自测断言
+          - 验收准则见 deliverables 中的 PRD 规格书
+    deliverable:
+      title: "PRD 规格书: 令牌桶限流中间件"
+      type: spec
+      content: |
+        # 需求与技术规格说明书 (演练)
+        ## 1. 业务目标
+        实现线程安全的令牌桶限流器, 单机 50,000 QPS。
+        ## 2. 验收准则
+        - acquire() 满足容量约束, 超量拒绝
+        - 按经过时间线性补充令牌, 无累积漂移
+        - 非法配置抛结构化错误
+  - when: { role: DEV, ticketType: task }
+    thought: 按 PRD 实现令牌桶核心类, 附带自测断言, 提交评审。
+    action: 完成核心实现与单元自测, 提交 REVIEW。
+    tickets:
+      - to: REVIEW
+        type: review
+        title: "[代码评审申请] 令牌桶限流中间件"
+        body: |
+          ## 提交评审详情
+          - 实现文件: src/core/token-bucket.ts
+          - 自测结果: 全部断言通过, 请架构组审查。
+    deliverable:
+      title: "生产级源码: TokenBucket"
+      type: code
+      content: |
+        export class TokenBucket {
+          constructor(public capacity: number, public refillPerSec: number) {
+            if (capacity <= 0 || refillPerSec <= 0) throw new Error('InvalidConfig');
+          }
+          private tokens = this.capacity;
+          private last = Date.now();
+          acquire(n = 1): boolean {
+            const now = Date.now();
+            this.tokens = Math.min(this.capacity, this.tokens + ((now - this.last) / 1000) * this.refillPerSec);
+            this.last = now;
+            if (this.tokens >= n) { this.tokens -= n; return true; }
+            return false;
+          }
+        }
+    memoryUpdates:
+      summaryUpdate: 已完成限流中间件编码并提交评审, 等待 REVIEW 裁决。
+      newDecision:
+        title: 令牌补充采用惰性按需计算
+        rationale: 避免定时器漂移, O(1) 恒定开销。
+  - when: { role: REVIEW, ticketType: review }
+    thought: "审查实现: 类型完备、无共享态竞争窗口、边界校验完整。准入。"
+    action: 出具架构审计报告, 签发至 QA。
+    tickets:
+      - to: QA
+        type: review
+        title: "[评审通过] 令牌桶限流中间件准入测试"
+        body: |
+          ## 架构审计概要
+          - 类型完备、并发安全、边界校验通过
+          - 裁决: 准予进入 QA 全链路验收。
+    deliverable:
+      title: 架构审计报告 (演练)
+      type: review
+      content: |
+        # 架构审计报告
+        | 审查项 | 结论 |
+        |---|---|
+        | 类型完备性 | ✅ |
+        | 并发安全 | ✅ 惰性补充单线程安全 |
+        | 边界校验 | ✅ |
+        裁决: 准予进入 QA。
+  - when: { role: QA, ticketType: review }
+    thought: "执行验收矩阵: 容量边界、补充速率、非法配置。全部通过, 签发准出。"
+    action: 出具验收报告并通知 PM 结项。
+    deliverable:
+      title: QA 验收报告 (演练)
+      type: test
+      content: |
+        # 质量验收报告
+        用例 12/12 通过 (演练剧本预置结果, 非真实执行)。
+    tickets:
+      - to: PM
+        type: notify
+        title: "[测试准出] 令牌桶限流中间件交付签发"
+        body: |
+          ## 质量准出通知
+          - 验收矩阵全部通过 (演练剧本预置)
+          - 建议 PM 归档并完成卡片流转。
+    memoryUpdates:
+      summaryUpdate: 限流中间件通过验收, 已签发准出通知。
+  - when: { role: PM, ticketType: notify }
+    thought: 收到准出通知, 归档结项。
+    action: 归档卡片, 交付完成。
