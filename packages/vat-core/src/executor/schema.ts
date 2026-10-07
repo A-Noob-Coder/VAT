@@ -11,29 +11,53 @@ export type ValidateResult =
 
 /** 从模型原始文本提取 JSON (容忍代码围栏、<think>/推理流噪声与前后缀文本) */
 export function extractJson(text: string): unknown {
-  // 推理型模型 (deepseek-reasoner 等) 会在正文输出 <think>...</think>, 先剥离
-  const cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(cleaned);
-  const candidate = fenced?.[1] ?? cleaned;
-  const start = candidate.indexOf('{');
-  const end = candidate.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) throw new Error('输出中未找到 JSON 对象');
-  const slice = candidate.slice(start, end + 1);
+  // 推理型模型 (deepseek-reasoner 等) 会在正文输出 <think>...</think>, 先剥离; 再去 BOM/零宽字符
+  const cleaned = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/^[\ufeff\u200b-\u200f\u202a-\u202e]+/, '')
+    .trim();
 
-  // 快路径: 整段可解析
-  try {
-    return JSON.parse(slice);
-  } catch {
-    /* 继续尝试 */
+  // 候选优先级 (关键: 裸 JSON 优先, 围栏候选靠后 —
+  // 否则信封 body 里的 markdown ``` 代码块会被误当围栏劫持提取)
+  const attempts: string[] = [];
+  // 1) 整段即 JSON (最常见: 裸信封, 无围栏无前后缀)
+  attempts.push(cleaned);
+  // 2) 首 { 到末 } 切片 (信封内含 ``` 代码块时依旧正确)
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start !== -1 && end > start) attempts.push(cleaned.slice(start, end + 1));
+  // 3) 围栏候选: 非贪婪逐个 + 贪婪外层, 都从后往前试
+  const fenceCandidates: string[] = [];
+  for (const m of cleaned.matchAll(/```(?:json)?\s*\n?([\s\S]*?)```/g)) {
+    fenceCandidates.push(m[1] ?? '');
+  }
+  const outer = /```(?:json)?\s*\n?([\s\S]*)```/.exec(cleaned);
+  if (outer?.[1]) fenceCandidates.push(outer[1]);
+  for (const f of fenceCandidates.reverse()) {
+    const s = f.indexOf('{');
+    const e = f.lastIndexOf('}');
+    if (s !== -1 && e > s) attempts.push(f.slice(s, e + 1));
+  }
+
+  for (const a of attempts) {
+    try {
+      return JSON.parse(a);
+    } catch {
+      try {
+        return JSON.parse(repairJson(a));
+      } catch {
+        /* 下一个候选 */
+      }
+    }
   }
 
   // 思考型模型路径: 输出流是自由思考, 最终 JSON 信封在"最后一个完整顶层对象"处 —
   // 从后往前逐个尝试顶层 {} 跨度 (粗暴的首 { 到末 } 切片会被思考中的代码污染)
-  const spans = topLevelObjectSpans(slice);
+  const spans = topLevelObjectSpans(cleaned);
   for (let i = spans.length - 1; i >= 0; i--) {
     const spanIndex = spans[i];
     if (!spanIndex) continue;
-    const span = slice.slice(spanIndex[0], spanIndex[1] + 1);
+    const span = cleaned.slice(spanIndex[0], spanIndex[1] + 1);
     try {
       return JSON.parse(span);
     } catch {
@@ -45,8 +69,7 @@ export function extractJson(text: string): unknown {
     }
   }
 
-  // 兜底: 粗暴切片 + 修复
-  return JSON.parse(repairJson(slice));
+  throw new Error('输出中未找到 JSON 对象');
 }
 
 /** 扫描出所有完整顶层 {} 跨度 (字符串感知, 容忍 // 行注释) */

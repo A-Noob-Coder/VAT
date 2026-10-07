@@ -70,7 +70,7 @@ export class LlmExecutor implements RoleExecutor {
       system,
       user,
       schema: ROLE_OUTPUT_JSON_SCHEMA,
-      maxTokens: 16384, // 思考型模型: 思考与答案共享输出预算, 预算过小会截断信封
+      maxTokens: 32768, // 思考型模型: 思考与答案共享输出预算, 预算过小会截断信封 (kimi 支持 128k 输出)
     });
     this.lastProviderId = res.providerId;
     this.lastModel = res.model;

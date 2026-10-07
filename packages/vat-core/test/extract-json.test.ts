@@ -48,6 +48,35 @@ describe('extractJson · 真实模型脏输出', () => {
   it('无 JSON → 报错', () => {
     expect(() => extractJson('这里没有任何对象')).toThrow(/未找到 JSON 对象/);
   });
+
+  it('裸信封内含 ``` 代码块 — 围栏不得劫持提取 (2026-10-07 PM PRD 故障回归)', () => {
+    const raw = [
+      '{"thought":"t","action":"a","tickets":[{"to":"DEV","type":"task","title":"t1",',
+      '"body":"## 数据模型\\n```\\ninterface Todo {\\n id: number;\\n content: string;\\n}\\n```\\n完成"}]}',
+    ].join('');
+    const out = extractJson(raw) as { tickets: Array<{ to: string; title: string }> };
+    expect(out.tickets[0].to).toBe('DEV');
+    expect(out.tickets[0].title).toBe('t1');
+  });
+
+  it('裸信封 + 前后缀散文 + body 内含真实换行的 interface 代码块', () => {
+    const raw = [
+      '好的, 以下是我的产出:\n',
+      '{"thought":"t","action":"a","tickets":[{"to":"QA","type":"review","title":"x",',
+      '"body":"说明:\\n```\\ninterface Todo {\\n id: number;\\n}\\n```\ndone"}],',
+      '"statusSuggestion":"ready"}\n以上。',
+    ].join('');
+    const out = extractJson(raw) as { tickets: Array<{ to: string }>; statusSuggestion: string };
+    expect(out.tickets[0].to).toBe('QA');
+    expect(out.statusSuggestion).toBe('ready');
+  });
+
+  it('字符串内裸换行/制表符 (未转义控制字符) 走修复路径', () => {
+    const raw =
+      '{"thought":"t","action":"a","tickets":[{"to":"DEV","type":"task","title":"x","body":"第一行\n第二行\n\t第三行"}]}';
+    const out = extractJson(raw) as { tickets: Array<{ body: string }> };
+    expect(out.tickets[0].body).toBe('第一行\n第二行\n\t第三行');
+  });
 });
 
 describe('repairJson', () => {
