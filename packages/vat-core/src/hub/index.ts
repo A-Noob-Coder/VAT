@@ -31,6 +31,7 @@ import { appendEvent } from '../events/index.js';
 import { appendLedger, readLedgerDay, summarize, todayKey } from '../ledger/index.js';
 import { memorySettingsFor, resolveRoleChain } from '../config.js';
 import { readSnapshot, writeMemoryUpdates } from '../memory/index.js';
+import type { Notifier } from '../notify/index.js';
 import { applySimulationWatermark } from '../executor/scripted.js';
 import {
   SeqAllocator,
@@ -55,6 +56,8 @@ export interface HubOptions {
   cardFilter?: string;
   now?: () => Date;
   onEvent?: (event: HubEvent) => void; // CLI 实时打印 / SSE 转发
+  /** 多通道通知器: type==='notify' 的单据投递时广播 (需求澄清/熔断裁决等人工介入信号)。 */
+  notifier?: Notifier;
 }
 
 export type StopReason = 'drained' | 'blocked' | 'budget' | 'checkpoint' | 'single-step' | 'error';
@@ -87,6 +90,35 @@ export class Hub {
     const event = appendEvent(this.opts.paths.eventsFile(todayKey(at)), evt, at);
     this.opts.onEvent?.(event);
     return event;
+  }
+
+  /**
+   * 统一投递出口: 落盘 + 通知广播。
+   * type==='notify' 的单据 (PM 需求澄清 / 熔断裁决恢复等) 表示需要人介入,
+   * 经 Notifier best-effort 广播到所有已启用通道, 单通道失败不阻断流水线。
+   */
+  private deliverOutgoing(ticket: Ticket, at: Date): void {
+    deliverTicket(this.opts.paths, ticket);
+    if (ticket.type === 'notify' && this.opts.notifier) {
+      void this.opts.notifier
+        .notify({
+          title: ticket.title,
+          body: ticket.body,
+          level: 'warn',
+          card: ticket.card,
+          meta: { from: ticket.from, to: ticket.to, ticketId: ticket.id },
+        })
+        .then((r) => {
+          if (r.failed.length > 0) {
+            this.emit({
+              type: 'warning',
+              severity: 'warning',
+              card: ticket.card,
+              message: `通知通道部分失败: ${r.failed.map((f) => `${f.id}(${f.error.slice(0, 60)})`).join(', ')}`,
+            }, at);
+          }
+        });
+    }
   }
 
   // ---------- 人工动作 ----------
@@ -702,7 +734,7 @@ export class Hub {
       if (checkpointStage) {
         this.holdTicket(cardId, t);
       } else {
-        deliverTicket(paths, t);
+        this.deliverOutgoing(t, at);
         this.emit({
           type: 'ticket_arrival',
           severity: 'info',

@@ -281,6 +281,10 @@ export interface VatConfig {
   modelSettings?: Record<string, { memory?: Partial<ModelMemorySettings> }>;
   git?: { autocommit?: boolean };
   hub?: { maxConcurrentCards?: number };
+  /** 多通道通知: 需求不明确/熔断裁决等人工介入信号经此广播 (见 notify 模块)。 */
+  notify?: import('./notify/index.js').NotifyConfig;
+  /** 项目注册表: 每个项目定义自己的工作区文件夹; 驾驶舱可在此切换服务端工作区。 */
+  projects?: Array<{ id: string; name: string; dir: string }>;
 }
 
 export const DEFAULT_MEMORY_SETTINGS: ModelMemorySettings = {

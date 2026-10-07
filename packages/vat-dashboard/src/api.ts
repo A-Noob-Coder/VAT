@@ -71,6 +71,12 @@ export interface ConfigDto {
   };
 }
 
+/** 工作区路径投影 */
+export interface PathsDto {
+  root: string;
+  paths: Record<string, string>;
+}
+
 async function post(action: string, body: object): Promise<void> {
   const res = await fetch(`/api/${action}`, {
     method: 'POST',
@@ -81,6 +87,17 @@ async function post(action: string, body: object): Promise<void> {
     const data = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
     throw new Error(data.error ?? `HTTP ${res.status}`);
   }
+}
+
+async function postJson<T>(action: string, body: object): Promise<T> {
+  const res = await fetch(`/api/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+  return data;
 }
 
 export const api = {
@@ -108,6 +125,23 @@ export const api = {
   },
   saveConfig(payload: { config?: Record<string, unknown>; charterData?: Record<string, unknown> }) {
     return post('config', payload);
+  },
+  /** 工作区各文件落盘路径 */
+  async paths(): Promise<PathsDto> {
+    const res = await fetch('/api/paths');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as PathsDto;
+  },
+  /** 切换服务端工作区到另一项目目录 */
+  switchProject(dir: string) {
+    return post('project/switch', { dir });
+  },
+  /** 测试发送一条通知到指定通道 */
+  testNotify(channel: Record<string, unknown>) {
+    return postJson<{ ok: boolean; sent: string[]; failed: Array<{ id: string; error: string }> }>(
+      'config/test-notify',
+      { channel }
+    );
   },
 };
 

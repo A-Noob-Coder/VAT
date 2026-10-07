@@ -7,6 +7,7 @@ import http from 'node:http';
 import path from 'node:path';
 import {
   Hub,
+  buildNotifier,
   loadCard,
   loadConfig,
   parseCharter,
@@ -322,6 +323,79 @@ export function startDashboardServer(
         });
         const cleanup = startEventStream(ctx, day, res);
         req.on('close', cleanup);
+        return;
+      }
+
+      // ---- 项目与路径 ----
+      if (url.pathname === '/api/paths' && req.method === 'GET') {
+        const p = ctx.paths;
+        const abs = (v: string) => path.resolve(v);
+        sendJson(res, 200, {
+          root: abs(ctx.root),
+          paths: {
+            charterFile: abs(p.charterFile),
+            configFile: abs(p.configFile),
+            boardDir: abs(p.boardDir),
+            ticketsDir: abs(p.ticketsDir),
+            deadDir: abs(p.deadDir),
+            heldDir: abs(p.heldDir),
+            memoryDir: abs(p.memoryDir),
+            projectsDir: abs(p.projectsDir),
+            deliverablesDir: abs(p.deliverablesDir),
+            ledgerDir: abs(p.ledgerDir),
+            eventsDir: abs(p.eventsDir),
+            scenariosDir: abs(p.scenariosDir),
+            tasksDir: abs(p.tasksDir),
+          },
+        });
+        return;
+      }
+      // 切换服务端工作区到另一个已注册项目目录 (需含 agent.md 章程)
+      if (url.pathname === '/api/project/switch' && req.method === 'POST') {
+        try {
+          const body = JSON.parse((await readBody(req)) || '{}') as { dir?: string };
+          const dir = path.resolve(String(body.dir ?? ''));
+          if (!dir) throw new Error('缺少 dir');
+          const charterPath = path.join(dir, 'agent.md');
+          if (!fs.existsSync(charterPath)) {
+            throw new Error(`目录 ${dir} 缺少 agent.md, 不是合法 VAT 工作区 (先在该目录运行 vat init)`);
+          }
+          const nextPaths = resolvePaths(dir);
+          const nextConfig = loadConfig(nextPaths.configFile);
+          const nextCharter = parseCharter(fs.readFileSync(charterPath, 'utf8'));
+          ctx.root = dir;
+          ctx.paths = nextPaths;
+          ctx.config = nextConfig;
+          ctx.charter = nextCharter;
+          sendJson(res, 200, { ok: true, root: dir, roles: nextCharter.data.team.roles.length });
+        } catch (err) {
+          sendJson(res, 400, { error: (err as Error).message });
+        }
+        return;
+      }
+
+      // ---- 通知渠道测试发送 ----
+      if (url.pathname === '/api/config/test-notify' && req.method === 'POST') {
+        try {
+          const body = JSON.parse((await readBody(req)) || '{}') as { channel?: unknown };
+          if (!body.channel || typeof body.channel !== 'object') {
+            throw new Error('缺少 channel 配置');
+          }
+          const notifier = buildNotifier({
+            notify: { channels: [body.channel as never] },
+          });
+          const result = await notifier.notify({
+            title: 'VAT 测试通知',
+            body: `这是一条来自 VAT 驾驶舱的测试通知 (${new Date().toLocaleString('zh-CN')})。\n收到即表示该通道配置有效。`,
+            level: 'info',
+          });
+          if (result.sent.length === 0) {
+            throw new Error(`全部通道发送失败: ${result.failed.map((f) => f.error.slice(0, 120)).join('; ')}`);
+          }
+          sendJson(res, 200, { ok: true, sent: result.sent, failed: result.failed });
+        } catch (err) {
+          sendJson(res, 400, { error: (err as Error).message });
+        }
         return;
       }
 

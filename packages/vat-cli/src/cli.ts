@@ -34,6 +34,7 @@ import {
   resolvePaths,
   summarize,
   todayKey,
+  buildNotifier,
   resolveRoleChain,
   CharterError,
   ConfigError,
@@ -172,6 +173,9 @@ function buildHub(
         ? buildExecutor(ctx, 'draft')
         : undefined;
   const strictGate = mode === 'strict' ? buildStrictGate(ctx) : undefined;
+  const notifier = buildNotifier(ctx.config, {
+    logger: opts.quiet ? undefined : (l) => console.error(dim(l)),
+  });
   return new Hub({
     paths: ctx.paths,
     charter: ctx.charter,
@@ -179,6 +183,7 @@ function buildHub(
     mode,
     executor,
     strictGate,
+    notifier,
     oneStep: opts.step,
     cardFilter: opts.card,
     onEvent: opts.quiet

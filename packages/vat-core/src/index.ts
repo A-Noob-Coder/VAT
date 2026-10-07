@@ -17,3 +17,4 @@ export * from './hub/index.js';
 export * from './hub/git.js';
 export * from './lock.js';
 export * from './watcher/index.js';
+export * from './notify/index.js';
