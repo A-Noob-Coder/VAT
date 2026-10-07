@@ -11,6 +11,7 @@ import {
   loadCard,
   loadConfig,
   parseCharter,
+  parseTicket,
   readLedgerDay,
   readEvents,
   renderCharter,
@@ -23,6 +24,7 @@ import {
   type HubEvent,
   type Priority,
   type ResumePoint,
+  type Ticket,
   type VatConfig,
 } from '@vat/core';
 import type { WorkspacePaths } from '@vat/core';
@@ -92,6 +94,165 @@ function buildState(ctx: DashboardContext, day: string) {
       dailyLimit: charter.data.budget.daily_token_limit,
     },
     days,
+  };
+}
+
+// ---------- 图谱投影 (席位环绕项目的知识图谱) ----------
+
+/** 扫描全部信箱目录, 建立 ticket id → Ticket 索引 (in/ + archive/ + _held/<card>/) */
+function collectTickets(paths: WorkspacePaths): Map<string, Ticket> {
+  const map = new Map<string, Ticket>();
+  const scanDir = (dir: string) => {
+    if (!fs.existsSync(dir)) return;
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith('.md')) continue;
+      try {
+        const t = parseTicket(f, fs.readFileSync(path.join(dir, f), 'utf8'));
+        map.set(t.id, t);
+      } catch {
+        // 坏文件跳过, 不阻塞投影
+      }
+    }
+  };
+  if (!fs.existsSync(paths.ticketsDir)) return map;
+  for (const entry of fs.readdirSync(paths.ticketsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith('_')) continue;
+    scanDir(path.join(paths.ticketsDir, entry.name, 'in'));
+    scanDir(path.join(paths.ticketsDir, entry.name, 'archive'));
+  }
+  if (fs.existsSync(paths.heldDir)) {
+    for (const entry of fs.readdirSync(paths.heldDir, { withFileTypes: true })) {
+      if (entry.isDirectory()) scanDir(path.join(paths.heldDir, entry.name));
+    }
+  }
+  return map;
+}
+
+function buildGraph(ctx: DashboardContext, cardId?: string | null) {
+  const { paths, charter } = ctx;
+  const cards: Card[] = fs.existsSync(paths.boardDir)
+    ? fs
+        .readdirSync(paths.boardDir)
+        .filter((n) => /^CARD-\d+\.md$/.test(n))
+        .sort()
+        .map((n) => loadCard(paths, path.basename(n, '.md')))
+    : [];
+  const card =
+    (cardId ? cards.find((c) => c.id === cardId) : undefined) ??
+    cards.find((c) => c.checkpoint) ??
+    cards.find((c) => c.status !== 'done') ??
+    cards[cards.length - 1] ??
+    null;
+
+  // 席位: USER + 章程编制; active = 持有单据或为卡片当前 owner
+  const seats = [
+    { id: 'USER', title: '主程', pending: 0, active: false, isOwner: false },
+    ...charter.data.team.roles.map((r) => ({
+      id: r.id,
+      title: r.title,
+      pending: scanInbox(paths.mailboxIn(r.id)).length,
+      active: r.id === card?.owner || scanInbox(paths.mailboxIn(r.id)).length > 0,
+      isOwner: r.id === card?.owner,
+    })),
+  ];
+
+  const checkpoints = (
+    [
+      ['requirement_approval', '需求批准'],
+      ['release_approval', '发布批准'],
+    ] as const
+  ).map(([id, label]) => ({
+    id,
+    label,
+    enabled: Boolean(
+      charter.data.checkpoints[id as 'requirement_approval' | 'release_approval']
+    ),
+    passed: card ? card.checkpoints_passed.includes(id) : false,
+    waiting: card?.checkpoint?.stage === id,
+  }));
+
+  // 边: ticket_chain 逐票还原 from→to:type, 去重计数; defect/return 为反馈边
+  const ticketsById = collectTickets(paths);
+  const edgeMap = new Map<
+    string,
+    { from: string; to: string; label: string; count: number; lastAt: string; kind: 'flow' | 'feedback' }
+  >();
+  let latest: Ticket | undefined;
+  if (card) {
+    const chain = card.ticket_chain
+      .map((id) => ticketsById.get(id))
+      .filter((t): t is Ticket => Boolean(t))
+      .sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+    for (const t of chain) {
+      latest = t;
+      const key = `${t.from}->${t.to}:${t.type}`;
+      const prev = edgeMap.get(key);
+      const kind: 'flow' | 'feedback' = t.type === 'defect' || t.type === 'return' ? 'feedback' : 'flow';
+      if (prev) {
+        prev.count += 1;
+        prev.lastAt = t.created_at;
+      } else {
+        edgeMap.set(key, { from: t.from, to: t.to, label: t.type, count: 1, lastAt: t.created_at, kind });
+      }
+    }
+  }
+  const edges = [...edgeMap.values()].map((e) => ({
+    ...e,
+    active: Boolean(
+      latest && e.from === latest.from && e.to === latest.to && e.label === latest.type
+    ),
+  }));
+
+  // 工件: 交付物挂在产出角色出发的第一条边上; PRD 在需求批准后挂到 PM 出发的边
+  const artifacts: Array<{ id: string; label: string; role: string; edgeKey: string }> = [];
+  if (card) {
+    for (const d of card.deliverables) {
+      const target = edges.find((e) => e.from === d.role);
+      if (target) {
+        artifacts.push({
+          id: `dlv-${artifacts.length}`,
+          label: d.title,
+          role: d.role,
+          edgeKey: `${target.from}->${target.to}:${target.label}`,
+        });
+      }
+    }
+    if (card.checkpoints_passed.includes('requirement_approval')) {
+      const prdEdge = edges.find((e) => e.from === 'PM');
+      if (prdEdge) {
+        artifacts.push({
+          id: 'prd',
+          label: 'PRD.md',
+          role: 'PM',
+          edgeKey: `${prdEdge.from}->${prdEdge.to}:${prdEdge.label}`,
+        });
+      }
+    }
+  }
+
+  return {
+    cards: cards.map((c) => ({
+      id: c.id,
+      title: c.title,
+      status: c.status,
+      checkpoint: c.checkpoint ?? null,
+    })),
+    card: card
+      ? {
+          id: card.id,
+          title: card.title,
+          status: card.status,
+          owner: card.owner,
+          frozen: card.frozen,
+          checkpoint: card.checkpoint ?? null,
+          checkpoints_passed: card.checkpoints_passed,
+        }
+      : null,
+    seats,
+    checkpoints,
+    artifacts,
+    edges,
   };
 }
 
@@ -312,6 +473,10 @@ export function startDashboardServer(
       if (url.pathname === '/api/state') {
         const day = url.searchParams.get('day') ?? todayKey();
         sendJson(res, 200, buildState(ctx, day));
+        return;
+      }
+      if (url.pathname === '/api/graph' && req.method === 'GET') {
+        sendJson(res, 200, buildGraph(ctx, url.searchParams.get('card')));
         return;
       }
       if (url.pathname === '/api/events') {

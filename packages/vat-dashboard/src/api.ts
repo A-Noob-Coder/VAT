@@ -77,6 +77,32 @@ export interface PathsDto {
   paths: Record<string, string>;
 }
 
+/** 图谱投影: 席位环绕项目的知识图谱 (节点 + 流转边 + 工件) */
+export interface GraphDto {
+  cards: Array<{ id: string; title: string; status: CardStatus; checkpoint: { stage: string; since: string } | null }>;
+  card: {
+    id: string;
+    title: string;
+    status: CardStatus;
+    owner: string;
+    frozen: boolean;
+    checkpoint: { stage: string; since: string } | null;
+    checkpoints_passed: string[];
+  } | null;
+  seats: Array<{ id: string; title: string; pending: number; active: boolean; isOwner: boolean }>;
+  checkpoints: Array<{ id: string; label: string; enabled: boolean; passed: boolean; waiting: boolean }>;
+  artifacts: Array<{ id: string; label: string; role: string; edgeKey: string }>;
+  edges: Array<{
+    from: string;
+    to: string;
+    label: string;
+    count: number;
+    lastAt: string;
+    kind: 'flow' | 'feedback';
+    active: boolean;
+  }>;
+}
+
 async function post(action: string, body: object): Promise<void> {
   const res = await fetch(`/api/${action}`, {
     method: 'POST',
@@ -131,6 +157,13 @@ export const api = {
     const res = await fetch('/api/paths');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) as PathsDto;
+  },
+  /** 图谱投影 (默认聚焦当前活跃卡片) */
+  async graph(cardId?: string | null): Promise<GraphDto> {
+    const qs = cardId ? `?card=${encodeURIComponent(cardId)}` : '';
+    const res = await fetch(`/api/graph${qs}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as GraphDto;
   },
   /** 切换服务端工作区到另一项目目录 */
   switchProject(dir: string) {

@@ -834,3 +834,144 @@ body {
   background: var(--accent-soft);
   color: var(--accent);
 }
+
+/* ---------- 图谱主视图 (席位环绕项目) ---------- */
+.graph-shell {
+  display: flex;
+  gap: 14px;
+  height: calc(100vh - 200px);
+  min-height: 480px;
+}
+.graph-main {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  overflow: auto;
+}
+.graph-side {
+  width: 290px;
+  flex-shrink: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.graph-side-title {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.graph-side-body {
+  flex: 1;
+  overflow: auto;
+}
+.graph-card-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 14px 0;
+}
+.graph-edge {
+  stroke: var(--text-tertiary);
+  stroke-opacity: 0.45;
+  stroke-width: 1.2;
+  fill: none;
+}
+.graph-edge.feedback {
+  stroke-dasharray: 5 5;
+}
+.graph-edge.active {
+  stroke: var(--accent);
+  stroke-opacity: 0.9;
+  stroke-width: 1.6;
+  stroke-dasharray: 7 5;
+  animation: graph-dash 1s linear infinite;
+}
+.graph-edge-label {
+  font-size: 12px;
+  fill: var(--text-tertiary);
+}
+.graph-node rect {
+  fill: var(--bg-elevated);
+  stroke: var(--hairline);
+  stroke-width: 1;
+}
+.graph-node text {
+  font-size: 13px;
+  fill: var(--text-primary);
+}
+.graph-node text.sub {
+  font-size: 11px;
+  fill: var(--text-secondary);
+}
+.graph-node.checkpoint rect {
+  stroke: var(--warn);
+}
+.graph-node.active rect {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+.graph-node.waiting rect {
+  stroke: var(--warn);
+  stroke-width: 1.6;
+  animation: graph-pulse 1.6s ease-in-out infinite;
+}
+.graph-node.center rect {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+.graph-badge {
+  fill: var(--warn);
+}
+.graph-badge-text {
+  font-size: 10px;
+  fill: var(--bg-canvas);
+}
+.graph-chip rect {
+  fill: var(--bg-elevated);
+  stroke: var(--hairline-accent);
+  stroke-width: 0.8;
+}
+.graph-chip text {
+  font-size: 11px;
+  fill: var(--text-secondary);
+}
+.graph-legend {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 4px 12px 12px;
+}
+.icon-btn.gear {
+  font-size: 15px;
+  padding: 2px 6px;
+}
+.icon-btn.gear-active {
+  color: var(--accent);
+}
+@keyframes graph-dash {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+@keyframes graph-pulse {
+  0%,
+  100% {
+    stroke-opacity: 1;
+  }
+  50% {
+    stroke-opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .graph-edge.active,
+  .graph-node.waiting {
+    animation: none;
+  }
+}

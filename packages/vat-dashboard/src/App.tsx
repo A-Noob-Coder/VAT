@@ -9,6 +9,7 @@ import {
 } from './api';
 import { ACCENTS, getThemePref, saveThemePref, type ThemeName } from './theme';
 import ConfigPanel from './ConfigPanel';
+import GraphView from './GraphView';
 
 const STATUSES: Array<{ id: CardDto['status']; num: string; label: string }> = [
   { id: 'backlog', num: '01', label: '待规划' },
@@ -24,12 +25,12 @@ const STAGE_LABEL: Record<string, string> = {
   release_approval: '发布批准',
 };
 
-type Tab = 'board' | 'events' | 'ledger' | 'config';
+type Tab = 'graph' | 'board' | 'events' | 'ledger' | 'config';
 
 export default function App() {
   const [state, setState] = useState<StateDto | null>(null);
   const [day, setDay] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('board');
+  const [tab, setTab] = useState<Tab>('graph');
   const [selected, setSelected] = useState<CardDto | null>(null);
   const [events, setEvents] = useState<EventDto[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +86,13 @@ export default function App() {
           <span className="mono dim">
             账本 {state.ledger.billableTokens.toLocaleString()} token
           </span>
+          <button
+            className={`icon-btn gear${tab === 'config' ? ' gear-active' : ''}`}
+            title="设置中心"
+            onClick={() => setTab((t) => (t === 'config' ? 'graph' : 'config'))}
+          >
+            ⚙
+          </button>
           <ThemeSwitcher />
           {state.days.length > 1 && (
             <select
@@ -120,21 +128,34 @@ export default function App() {
       <nav className="tabs">
         {(
           [
+            ['graph', '图谱'],
             ['board', '看板'],
             ['events', `事件流 (${events.length})`],
             ['ledger', '账本'],
-            ['config', '配置'],
           ] as Array<[Tab, string]>
         ).map(([id, label]) => (
-          <button key={id} className={`tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
+            <button key={id} className={`tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
+              {label}
+            </button>
+          ))}
         <div className="tabs-spacer" />
         <NewReq onDone={refresh} />
       </nav>
 
       <main className="content">
+        {tab === 'graph' && (
+          <div className="graph-shell">
+            <div className="graph-main">
+              <GraphView refreshKey={state} />
+            </div>
+            <aside className="graph-side">
+              <div className="graph-side-title mono">事件时间线 · 实时</div>
+              <div className="graph-side-body">
+                <EventStream events={events} />
+              </div>
+            </aside>
+          </div>
+        )}
         {tab === 'board' && <Board state={state} onSelect={setSelected} />}
         {tab === 'events' && <EventStream events={events} />}
         {tab === 'ledger' && <Ledger state={state} />}
