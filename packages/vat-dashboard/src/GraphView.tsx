@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, type GraphDto } from './api';
 
-const CX = 340;
-const CY = 268;
-const R = 205;
+const CX = 380;
+const CY = 300;
+const R = 218;
+
+const SEAT_W = 120;
+const SEAT_H = 46;
+const CHK_W = 168;
+const CHK_H = 42;
+const CARD_W = 200;
+const CARD_H = 68;
 
 interface RingNode {
   key: string;
@@ -43,22 +50,38 @@ export default function GraphView({ refreshKey }: { refreshKey: unknown }) {
 
   const ring = useMemo<RingNode[]>(() => {
     if (!graph) return [];
-    const items: RingNode[] = graph.seats.map((s) => ({
-      key: s.id,
-      kind: 'seat',
-      label: s.id,
-      title: s.title,
-      pending: s.pending,
-      active: s.active,
-    }));
-    for (const c of graph.checkpoints) {
-      if (c.enabled) {
-        items.push({
-          key: `chk-${c.id}`,
-          kind: 'checkpoint',
-          label: `卡点 · ${c.label}${c.passed ? ' ✓' : ''}`,
-          waiting: c.waiting,
-        });
+    const items: RingNode[] = [];
+    // 按业务流顺序入环: USER → PM → (需求卡点) → …角色… → QA → (发布卡点) → OPS
+    for (const s of graph.seats) {
+      items.push({
+        key: s.id,
+        kind: 'seat',
+        label: s.id,
+        title: s.title,
+        pending: s.pending,
+        active: s.active,
+      });
+      if (s.id === 'PM') {
+        const c = graph.checkpoints.find((x) => x.id === 'requirement_approval');
+        if (c?.enabled) {
+          items.push({
+            key: `chk-${c.id}`,
+            kind: 'checkpoint',
+            label: `卡点 · ${c.label}${c.passed ? ' ✓' : ''}`,
+            waiting: c.waiting,
+          });
+        }
+      }
+      if (s.id === 'QA') {
+        const c = graph.checkpoints.find((x) => x.id === 'release_approval');
+        if (c?.enabled) {
+          items.push({
+            key: `chk-${c.id}`,
+            kind: 'checkpoint',
+            label: `卡点 · ${c.label}${c.passed ? ' ✓' : ''}`,
+            waiting: c.waiting,
+          });
+        }
       }
     }
     return items;
@@ -91,7 +114,7 @@ export default function GraphView({ refreshKey }: { refreshKey: unknown }) {
           ))}
         </div>
       )}
-      <svg viewBox="0 0 680 556" width="100%" role="img">
+      <svg viewBox="0 0 760 600" width="100%" role="img">
         <title>编排知识图谱: 席位环绕项目</title>
         <defs>
           <marker id="garrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -107,8 +130,8 @@ export default function GraphView({ refreshKey }: { refreshKey: unknown }) {
           const a = pos.get(e.from);
           const b = pos.get(e.to);
           if (!a || !b) return null;
-          const mx = (a.x + b.x) / 2;
-          const my = (a.y + b.y) / 2;
+          const lx = a.x + (b.x - a.x) * 0.32;
+          const ly = a.y + (b.y - a.y) * 0.32 - 8;
           return (
             <g key={`${e.from}-${e.to}-${e.label}`}>
               <line
@@ -119,7 +142,7 @@ export default function GraphView({ refreshKey }: { refreshKey: unknown }) {
                 className={`graph-edge ${e.kind}${e.active ? ' active' : ''}`}
                 markerEnd={e.active ? 'url(#garrow-a)' : 'url(#garrow)'}
               />
-              <text x={mx} y={my - 7} textAnchor="middle" className="graph-edge-label">
+              <text x={lx} y={ly} textAnchor="middle" className="graph-edge-label">
                 {e.label}
                 {e.count > 1 ? ` ×${e.count}` : ''}
               </text>
@@ -127,21 +150,24 @@ export default function GraphView({ refreshKey }: { refreshKey: unknown }) {
           );
         })}
 
-        {/* 文件工件小片 (挂边中点) */}
+        {/* 文件工件小片 (挂边 72% 处, 沿法线偏移避让中心卡) */}
         {graph.artifacts.map((a) => {
           const e = graph.edges.find((x) => `${x.from}->${x.to}:${x.label}` === a.edgeKey);
           if (!e) return null;
           const p1 = pos.get(e.from);
           const p2 = pos.get(e.to);
           if (!p1 || !p2) return null;
-          const mx = (p1.x + p2.x) / 2;
-          const my = (p1.y + p2.y) / 2 + 16;
-          const w = Math.min(160, a.label.length * 12 + 20);
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const mx = p1.x + dx * 0.72 + (-dy / len) * 22;
+          const my = p1.y + dy * 0.72 + (dx / len) * 22;
+          const w = Math.min(172, a.label.length * 12 + 20);
           return (
             <g key={a.id} className="graph-chip">
               <rect x={mx - w / 2} y={my - 11} width={w} height={22} rx={6} />
               <text x={mx} y={my} textAnchor="middle" dominantBaseline="central">
-                {trunc(a.label, 11)}
+                {trunc(a.label, 12)}
               </text>
               <title>{`${a.label} (由 ${a.role} 产出)`}</title>
             </g>
@@ -150,12 +176,12 @@ export default function GraphView({ refreshKey }: { refreshKey: unknown }) {
 
         {/* 中心: 项目卡片 */}
         <g className="graph-node center">
-          <rect x={CX - 92} y={CY - 32} width={184} height={64} rx={12} />
-          <text x={CX} y={CY - 11} textAnchor="middle" dominantBaseline="central">
+          <rect x={CX - CARD_W / 2} y={CY - CARD_H / 2} width={CARD_W} height={CARD_H} rx={12} />
+          <text x={CX} y={CY - 12} textAnchor="middle" dominantBaseline="central">
             {graph.card ? `${graph.card.id} · ${graph.card.status}` : '无进行中卡片'}
           </text>
-          <text x={CX} y={CY + 13} textAnchor="middle" dominantBaseline="central" className="sub">
-            {graph.card ? trunc(graph.card.title, 14) : '提交需求后点亮图谱'}
+          <text x={CX} y={CY + 14} textAnchor="middle" dominantBaseline="central" className="sub">
+            {graph.card ? trunc(graph.card.title, 16) : '提交需求后点亮图谱'}
           </text>
           {graph.card && (
             <title>
@@ -168,8 +194,8 @@ export default function GraphView({ refreshKey }: { refreshKey: unknown }) {
         {ring.map((n) => {
           const p = pos.get(n.key);
           if (!p) return null;
-          const w = n.kind === 'checkpoint' ? 152 : 110;
-          const h = n.kind === 'checkpoint' ? 38 : 44;
+          const w = n.kind === 'checkpoint' ? CHK_W : SEAT_W;
+          const h = n.kind === 'checkpoint' ? CHK_H : SEAT_H;
           const cls = `graph-node ${n.kind}${n.active ? ' active' : ''}${n.waiting ? ' waiting' : ''}`;
           const hasSub = n.kind === 'seat';
           return (

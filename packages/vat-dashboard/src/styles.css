@@ -870,6 +870,19 @@ body {
   flex: 1;
   overflow: auto;
 }
+/* 窄栏事件行: 元信息一行, 消息独占下一行并可换行 (修复逐字竖排溢出) */
+.graph-side-body .event {
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  border-bottom: 1px solid var(--hairline);
+  border-radius: 0;
+}
+.graph-side-body .event > span:last-child {
+  flex: 1 1 100%;
+  min-width: 0;
+  word-break: break-word;
+  line-height: 1.55;
+}
 .graph-card-chips {
   display: flex;
   gap: 8px;
