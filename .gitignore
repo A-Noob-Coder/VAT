@@ -3,3 +3,8 @@ dist/
 *.tsbuildinfo
 .env
 .env.local
+
+# 运行时临时工件 (Watcher 锁 / 测试场景记忆)
+.vat-watch-lock
+vat-mem-*/
+

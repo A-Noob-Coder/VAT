@@ -15,6 +15,8 @@ import type {
 import {
   Hub,
   LlmExecutor,
+  LeaderLock,
+  Watcher,
   ScriptedExecutor,
   checkWorkspace,
   compressMemory,
@@ -35,7 +37,7 @@ import {
   ConfigError,
   DEFAULT_MEMORY_SETTINGS,
 } from '@vat/core';
-import { ModelRouter } from '@vat/providers';
+import { ModelRouter, suggestChain } from '@vat/providers';
 import { StrictRunner, dockerAvailable, resolveToolchainBin } from '@vat/strict';
 
 // ---------- 输出助手 ----------
@@ -508,6 +510,11 @@ program
       for (const r of results) {
         console.log(r.ok ? green(`✓ 探测 ${r.providerId}: 可用 (${r.detail})`) : red(`✗ 探测 ${r.providerId}: ${r.detail}`));
       }
+      const suggested = suggestChain(chain, results);
+      console.log(gold(`建议 modelChain (可用优先): [${suggested.join(', ')}]`));
+      if (suggested.join(',') !== chain.join(',')) {
+        console.log(dim('  → 把以上顺序写入 vat.config.json 的 modelChain 即可换主力模型 (v0.3 #8 / K01)'));
+      }
     }
   });
 
@@ -537,6 +544,35 @@ program
     console.log(green(`✓ VAT 驾驶舱已启动: http://127.0.0.1:${handle.port}`));
     console.log(dim('  只绑 127.0.0.1 (仅本机可访问); Ctrl+C 停止'));
     console.log(dim('  观察流程: 终端 vat run 推进流水线, 此处实时投影并处理卡点/熔断'));
+  });
+
+program
+  .command('watch')
+  .description('启动 Watcher 守护: 监听 tickets/*-docs/in/*.md, 自动唤起 Hub 处理 (单 leader, 跨进程锁)')
+  .option('--mode <mode>', 'draft | simulation | strict (默认取章程 execution.default_mode)')
+  .option('--poll <ms>', '轮询间隔(ms)', '1000')
+  .action(async (opts: { mode?: string; poll: string }) => {
+    const ctx = loadContext(program.opts().dir as string);
+    const mode = resolveMode(ctx, opts.mode);
+    const hub = buildHub(ctx, mode, { quiet: false });
+    const lock = new LeaderLock({ lockFile: path.join(ctx.root, '.vat-watch-lock') });
+    const watcher = new Watcher({
+      paths: ctx.paths,
+      dispatch: async () => {
+        await hub.run();
+      },
+      lock,
+      pollingMs: Number(opts.poll),
+    });
+    console.log(green(`✓ VAT Watcher 已启动 (leader=${lock.isLeader}) — 监听 ${ctx.paths.ticketsDir}/*-docs/in/*.md`));
+    console.log(dim('   仅一个进程为 leader (跨进程锁), 其余自动转 follower; Ctrl+C 停止'));
+    console.log(dim('   fallback: 守护挂了直接 `vat run` 兜底 (两者共用 Hub, 互不冲突)'));
+    const onSig = () => {
+      void watcher.stop().then(() => process.exit(0));
+    };
+    process.on('SIGINT', onSig);
+    process.on('SIGTERM', onSig);
+    await watcher.start();
   });
 
 program.parseAsync();

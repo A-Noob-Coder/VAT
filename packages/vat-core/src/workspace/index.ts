@@ -19,6 +19,7 @@ export interface WorkspacePaths {
   ledgerDir: string;
   eventsDir: string;
   scenariosDir: string;
+  tasksDir: string;
 
   mailboxIn(roleId: string): string;
   mailboxArchive(roleId: string): string;
@@ -28,6 +29,7 @@ export interface WorkspacePaths {
   cardDeliverableDir(cardId: string): string;
   ledgerFile(day: string): string; // day = YYYYMMDD
   eventsFile(day: string): string;
+  taskDocsDir(cardId: string): string; // K08 任务级记忆: tasks/<CARD_ID>/docs
 }
 
 export function resolvePaths(root: string): WorkspacePaths {
@@ -46,10 +48,12 @@ export function resolvePaths(root: string): WorkspacePaths {
     ledgerDir: p('ledger'),
     eventsDir: p('events'),
     scenariosDir: p('scenarios'),
+    tasksDir: p('tasks'),
 
     mailboxIn: (roleId) => p('tickets', `${roleId}-docs`, 'in'),
     mailboxArchive: (roleId) => p('tickets', `${roleId}-docs`, 'archive'),
     roleMemoryDir: (roleId) => p('memory', roleId),
+    taskDocsDir: (cardId) => p('tasks', cardId, 'docs'),
     cardFile: (cardId) => p('board', `${cardId}.md`),
     cardProjectDir: (cardId) => p('projects', cardId),
     cardDeliverableDir: (cardId) => p('deliverables', cardId),
@@ -72,6 +76,7 @@ export function initWorkspace(root: string, charter?: Charter): void {
     paths.ledgerDir,
     paths.eventsDir,
     paths.scenariosDir,
+    paths.tasksDir,
   ]) {
     fs.mkdirSync(dir, { recursive: true });
   }

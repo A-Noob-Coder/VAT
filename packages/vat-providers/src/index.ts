@@ -1,4 +1,7 @@
 // 多协议模型接入层 (架构设计 §7.1): openai-compat / anthropic / gemini + 跨协议容灾链
+export * from './probe.js';
+
+
 //
 // 结构化输出策略:
 //  - gemini:    responseMimeType=application/json (schema 走 prompt 声明, 兼容性最好)

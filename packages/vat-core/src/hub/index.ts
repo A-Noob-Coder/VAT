@@ -117,6 +117,7 @@ export class Hub {
       body: `## 需求原文\n\n${input.body}\n`,
     };
     saveCard(paths, card);
+    fs.mkdirSync(paths.taskDocsDir(cardId), { recursive: true }); // K08 任务级记忆地基: tasks/<CARD_ID>/docs
 
     const seq = this.allocSeq().next(at);
     const ticket = createTicket(
