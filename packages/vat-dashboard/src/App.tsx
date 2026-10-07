@@ -83,7 +83,7 @@ export default function App() {
         </div>
         <div className="masthead-meta">
           <span className="mono dim">
-            账本 {state.ledger.billableTokens.toLocaleString()} / {state.ledger.dailyLimit.toLocaleString()}
+            账本 {state.ledger.billableTokens.toLocaleString()} token
           </span>
           <ThemeSwitcher />
           {state.days.length > 1 && (
@@ -222,6 +222,9 @@ function EventStream({ events }: { events: EventDto[] }) {
 
 function Ledger({ state }: { state: StateDto }) {
   const { ledger } = state;
+  // 总量封顶仅是可选熔断保护 (章程 budget.*, 0=不限制);
+  // 真正影响模型性能的是每角色·每任务会话窗口 token 上限 (设置中心 → 记忆窗口 → windowTokenLimit)
+  const showBudget = ledger.dailyLimit > 0;
   const pct = Math.min(100, Math.round((ledger.billableTokens / Math.max(1, ledger.dailyLimit)) * 100));
   return (
     <div className="ledger">
@@ -230,14 +233,16 @@ function Ledger({ state }: { state: StateDto }) {
         <Stat label="总 token" value={ledger.totalTokens.toLocaleString()} />
         <Stat label="计费口径 (真实 LLM)" value={ledger.billableTokens.toLocaleString()} />
       </div>
-      <div className="budget">
-        <div className="budget-label mono dim">
-          日预算 {ledger.billableTokens.toLocaleString()} / {ledger.dailyLimit.toLocaleString()} ({pct}%)
+      {showBudget && (
+        <div className="budget">
+          <div className="budget-label mono dim">
+            日预算保护 {ledger.billableTokens.toLocaleString()} / {ledger.dailyLimit.toLocaleString()} ({pct}%)
+          </div>
+          <div className="budget-bar">
+            <div className="budget-fill" style={{ width: `${pct}%` }} />
+          </div>
         </div>
-        <div className="budget-bar">
-          <div className="budget-fill" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
+      )}
       <div className="ledger-grid">
         <div>
           <h3>按角色</h3>

@@ -511,6 +511,10 @@ export default function ConfigPanel({ onSaved }: { onSaved?: () => void }) {
         {/* ---------- 记忆窗口 ---------- */}
         {section === 'memory' && (
           <section className="cfg-section">
+            <p className="cfg-hint">
+              windowTokenLimit = 每角色 · 每任务会话窗口的 token 上限 (默认 262144 = 256k)。
+              这是影响模型性能的压缩触发阈值, 不是全局总量封顶; 其余为字符级压缩参数。
+            </p>
             {providersById.length === 0 && <div className="empty">无供应商</div>}
             {providersById.map((pid) => {
               const mem = (modelSettings[pid]?.memory ?? {}) as AnyObj;
@@ -522,6 +526,15 @@ export default function ConfigPanel({ onSaved }: { onSaved?: () => void }) {
                     <span className="mono bronze">{pid}</span>
                   </div>
                   <div className="cfg-grid">
+                    <Field label="windowTokenLimit (会话窗口 token 上限)">
+                      <input
+                        className="mono"
+                        type="number"
+                        placeholder="262144"
+                        value={Number(mem.windowTokenLimit ?? 262144)}
+                        onChange={(e) => setMem('windowTokenLimit', Number(e.target.value))}
+                      />
+                    </Field>
                     <Field label="summaryWarnChars">
                       <input
                         className="mono"
@@ -583,7 +596,7 @@ export default function ConfigPanel({ onSaved }: { onSaved?: () => void }) {
         {section === 'charter' && (
           <section className="cfg-section">
             <div className="cfg-grid">
-              <Field label="预算 · 日 token 上限">
+              <Field label="预算 · 日 token 上限 (0 = 不限制)">
                 <input
                   className="mono"
                   type="number"
@@ -593,7 +606,7 @@ export default function ConfigPanel({ onSaved }: { onSaved?: () => void }) {
                   }
                 />
               </Field>
-              <Field label="预算 · 单卡片 token 上限">
+              <Field label="预算 · 单卡片 token 上限 (0 = 不限制)">
                 <input
                   className="mono"
                   type="number"

@@ -270,6 +270,9 @@ export interface ModelMemorySettings {
   summaryWarnChars: number;
   decisionWindow: number;
   lessonWindow: number;
+  /** 每角色 · 每任务会话窗口的 token 上限 (默认 262144 = 256k)。
+   *  这是影响模型性能的压缩触发阈值, 不是全局总量封顶; 达到阈值即触发该窗口的记忆压缩。 */
+  windowTokenLimit: number;
 }
 
 export interface VatConfig {
@@ -291,4 +294,5 @@ export const DEFAULT_MEMORY_SETTINGS: ModelMemorySettings = {
   summaryWarnChars: 4000,
   decisionWindow: 20,
   lessonWindow: 30,
+  windowTokenLimit: 262_144,
 };

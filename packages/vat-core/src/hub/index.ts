@@ -316,9 +316,11 @@ export class Hub {
   async run(): Promise<RunResult> {
     const { paths, charter } = this.opts;
 
-    // 预算守卫: 团队日限额 (只计真实 LLM 调用)
+    // 预算守卫: 团队日限额 (只计真实 LLM 调用)。0 = 不限制 (默认推荐);
+    // 真正影响模型性能的是单会话窗口大小 (memory.windowTokenLimit), 而非总量封顶。
     const daily = summarize(readLedgerDay(paths.ledgerFile(todayKey(this.now()))), true);
-    if (daily.billableTokens >= charter.data.budget.daily_token_limit) {
+    const dailyLimit = charter.data.budget.daily_token_limit;
+    if (dailyLimit > 0 && daily.billableTokens >= dailyLimit) {
       this.emit({
         type: 'budget_break',
         severity: 'error',
@@ -459,7 +461,8 @@ export class Hub {
         blockers.push(`frozen:${cardId} (${card.frozen_reason ?? 'rejections'})`);
         continue;
       }
-      if (card.token_used >= this.opts.charter.data.budget.per_card_token_limit) {
+      const perCardLimit = this.opts.charter.data.budget.per_card_token_limit;
+      if (perCardLimit > 0 && card.token_used >= perCardLimit) {
         this.freezeCard(card, 'budget', '单卡 token 预算触顶');
         blockers.push(`frozen:${cardId} (budget)`);
         continue;
