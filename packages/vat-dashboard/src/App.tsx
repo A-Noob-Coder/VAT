@@ -7,6 +7,8 @@ import {
   type StateDto,
   type StreamMessage,
 } from './api';
+import { ACCENTS, getThemePref, saveThemePref, type ThemeName } from './theme';
+import ConfigPanel from './ConfigPanel';
 
 const STATUSES: Array<{ id: CardDto['status']; num: string; label: string }> = [
   { id: 'backlog', num: '01', label: '待规划' },
@@ -22,7 +24,7 @@ const STAGE_LABEL: Record<string, string> = {
   release_approval: '发布批准',
 };
 
-type Tab = 'board' | 'events' | 'ledger';
+type Tab = 'board' | 'events' | 'ledger' | 'config';
 
 export default function App() {
   const [state, setState] = useState<StateDto | null>(null);
@@ -83,6 +85,7 @@ export default function App() {
           <span className="mono dim">
             账本 {state.ledger.billableTokens.toLocaleString()} / {state.ledger.dailyLimit.toLocaleString()}
           </span>
+          <ThemeSwitcher />
           {state.days.length > 1 && (
             <select
               className="day-select mono"
@@ -120,6 +123,7 @@ export default function App() {
             ['board', '看板'],
             ['events', `事件流 (${events.length})`],
             ['ledger', '账本'],
+            ['config', '配置'],
           ] as Array<[Tab, string]>
         ).map(([id, label]) => (
           <button key={id} className={`tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
@@ -134,6 +138,7 @@ export default function App() {
         {tab === 'board' && <Board state={state} onSelect={setSelected} />}
         {tab === 'events' && <EventStream events={events} />}
         {tab === 'ledger' && <Ledger state={state} />}
+        {tab === 'config' && <ConfigPanel onSaved={refresh} />}
       </main>
 
       {selected && (
@@ -459,6 +464,43 @@ function NewReq({ onDone }: { onDone: () => void }) {
         <button className="btn" onClick={() => setOpen(false)}>
           取消
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- 主题切换器 ----------
+
+function ThemeSwitcher() {
+  const [pref, setPref] = useState<{ theme: ThemeName; accent: string }>(getThemePref());
+  const change = (next: { theme: ThemeName; accent: string }) => {
+    setPref(next);
+    saveThemePref(next);
+  };
+  return (
+    <div className="theme-switcher">
+      <div className="theme-modes">
+        {(['dark', 'light'] as ThemeName[]).map((m) => (
+          <button
+            key={m}
+            className={`theme-mode ${pref.theme === m ? 'active' : ''}`}
+            onClick={() => change({ ...pref, theme: m })}
+            title={m === 'dark' ? '深色' : '浅色'}
+          >
+            {m === 'dark' ? '深' : '浅'}
+          </button>
+        ))}
+      </div>
+      <div className="theme-accents">
+        {ACCENTS.map((a) => (
+          <button
+            key={a.id}
+            className={`accent-dot ${pref.accent === a.color ? 'active' : ''}`}
+            style={{ background: a.color }}
+            title={a.name}
+            onClick={() => change({ ...pref, accent: a.color })}
+          />
+        ))}
       </div>
     </div>
   );

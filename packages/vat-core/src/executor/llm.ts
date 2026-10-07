@@ -12,21 +12,32 @@ const MEMORY_BUDGET_CHARS = 24000;
 export class LlmExecutor implements RoleExecutor {
   readonly kind = 'llm' as const;
 
-  constructor(private readonly client: ModelClient) {}
+  /**
+   * 接收单个 ModelClient (所有角色共用),
+   * 或接收按角色解析 client 的函数 (不同角色走不同模型通道)。
+   * 后者用于实现按角色单独配置模型 API。
+   */
+  constructor(
+    private readonly clientOrResolver: ModelClient | ((roleId: string) => ModelClient)
+  ) {}
 
   async run(ctx: RoleContext): Promise<ExecutorResult> {
+    const client =
+      typeof this.clientOrResolver === 'function'
+        ? this.clientOrResolver(ctx.role.id)
+        : this.clientOrResolver;
     const system = buildSystemPrompt(ctx);
     const user = buildUserPrompt(ctx);
     const started = Date.now();
 
-    let text = await this.callWithClient(system, user, ctx);
+    let text = await this.callWithClient(client, system, user, ctx);
     let parsed = safeValidate(text);
     if (!parsed.ok) {
       // 结构化修复重试一次: 把校验错误喂回去
       const repairUser =
         user +
         `\n\n【系统提示】你上一次的输出未通过校验: ${parsed.error}\n请严格按 JSON Schema 重新输出完整 JSON, 不要有任何解释性文字。`;
-      text = await this.callWithClient(system, repairUser, ctx);
+      text = await this.callWithClient(client, system, repairUser, ctx);
       parsed = safeValidate(text);
       if (!parsed.ok) {
         throw new Error(
@@ -49,8 +60,13 @@ export class LlmExecutor implements RoleExecutor {
   private lastModel?: string;
   private lastUsage?: ExecutorResult['usage'];
 
-  private async callWithClient(system: string, user: string, ctx: RoleContext) {
-    const res = await this.client.generate({
+  private async callWithClient(
+    client: ModelClient,
+    system: string,
+    user: string,
+    ctx: RoleContext
+  ) {
+    const res = await client.generate({
       system,
       user,
       schema: ROLE_OUTPUT_JSON_SCHEMA,

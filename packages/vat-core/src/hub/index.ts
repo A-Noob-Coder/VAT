@@ -29,7 +29,7 @@ import type { TurnPlan } from '../card/statemachine.js';
 import { DEFAULT_MAX_DEV_SELF_REPAIR } from '../types.js';
 import { appendEvent } from '../events/index.js';
 import { appendLedger, readLedgerDay, summarize, todayKey } from '../ledger/index.js';
-import { memorySettingsFor } from '../config.js';
+import { memorySettingsFor, resolveRoleChain } from '../config.js';
 import { readSnapshot, writeMemoryUpdates } from '../memory/index.js';
 import { applySimulationWatermark } from '../executor/scripted.js';
 import {
@@ -459,7 +459,7 @@ export class Hub {
       message: `单据 [${ticket.fileName}] 唤醒 ${role.title} (模式: ${this.opts.mode})`,
     }, at);
 
-    const memorySettings = memorySettingsFor(config, config.modelChain?.[0]);
+    const memorySettings = memorySettingsFor(config, resolveRoleChain(config, role.id)[0]);
     const memory = readSnapshot(paths.roleMemoryDir(role.id), memorySettings);
 
     let result: ExecutorResult;

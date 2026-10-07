@@ -8,6 +8,7 @@ import type {
   Card,
   CheckpointStage,
   ExecutionMode,
+  ModelClient,
   Priority,
   ResumePoint,
   RoleExecutor,
@@ -33,6 +34,7 @@ import {
   resolvePaths,
   summarize,
   todayKey,
+  resolveRoleChain,
   CharterError,
   ConfigError,
   DEFAULT_MEMORY_SETTINGS,
@@ -113,13 +115,34 @@ function buildExecutor(ctx: Ctx, mode: ExecutionMode, scenarioFile?: string): Ro
   if (mode === 'simulation') return buildScripted(ctx, scenarioFile);
   // strict 模式同样支持剧本驱动 (无 API Key 也能演示真实闸门): --scenario
   if (mode === 'strict' && scenarioFile) return buildScripted(ctx, scenarioFile);
-  const chain = ctx.config.modelChain ?? [];
   const providers = ctx.config.providers ?? [];
-  if (chain.length === 0 || providers.length === 0) {
-    fail('vat.config.json 缺少 providers/modelChain 配置, 无法进入该模式');
+  const globalChain = ctx.config.modelChain ?? [];
+  if (providers.length === 0) {
+    fail('vat.config.json 缺少 providers 配置, 无法进入该模式');
   }
-  const router = new ModelRouter(providers, chain);
-  return new LlmExecutor({ generate: (req) => router.generate(req) });
+
+  // 按角色解析模型通道: 不同角色可走各自擅长的模型 API (roleModels), 缺省回退全局 modelChain。
+  // 相同链路的角色共享同一个路由器实例, 从而共享限频冷却状态。
+  const routerCache = new Map<string, ModelClient>();
+  const clientForRole = (roleId: string): ModelClient => {
+    const chain = resolveRoleChain(ctx.config, roleId);
+    const effective = chain.length > 0 ? chain : globalChain;
+    if (effective.length === 0) {
+      throw new Error(
+        `角色 ${roleId} 没有可用的模型链路 (roleModels 与 modelChain 均为空或无效)`
+      );
+    }
+    const key = effective.join('>');
+    let client = routerCache.get(key);
+    if (!client) {
+      const router = new ModelRouter(providers, effective);
+      client = { generate: (req) => router.generate(req) };
+      routerCache.set(key, client);
+    }
+    return client;
+  };
+
+  return new LlmExecutor(clientForRole);
 }
 
 function buildStrictGate(ctx: Ctx): StrictRunner {

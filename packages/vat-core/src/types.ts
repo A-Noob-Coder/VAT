@@ -275,6 +275,9 @@ export interface ModelMemorySettings {
 export interface VatConfig {
   providers?: ProviderConfig[];
   modelChain?: string[];
+  /** 角色 → 模型通道: 填 provider id (单模型) 或 provider id 数组 (角色级容灾链)。
+   *  缺省 (未配置该角色) 时回退到全局 modelChain。用于让不同角色走各自擅长的模型 API。 */
+  roleModels?: Record<string, string | string[]>;
   modelSettings?: Record<string, { memory?: Partial<ModelMemorySettings> }>;
   git?: { autocommit?: boolean };
   hub?: { maxConcurrentCards?: number };

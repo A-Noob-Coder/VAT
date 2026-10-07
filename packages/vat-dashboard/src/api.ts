@@ -62,6 +62,15 @@ export interface StateDto {
   days: string[];
 }
 
+/** 配置中心: vat.config.json + 章程 frontmatter (data) 与正文 (body) */
+export interface ConfigDto {
+  config: Record<string, unknown>;
+  charter: {
+    data: Record<string, unknown>;
+    body: string;
+  };
+}
+
 async function post(action: string, body: object): Promise<void> {
   const res = await fetch(`/api/${action}`, {
     method: 'POST',
@@ -91,6 +100,14 @@ export const api = {
   },
   req(title: string, body: string, priority: string) {
     return post('req', { title, body, priority });
+  },
+  async config(): Promise<ConfigDto> {
+    const res = await fetch('/api/config');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as ConfigDto;
+  },
+  saveConfig(payload: { config?: Record<string, unknown>; charterData?: Record<string, unknown> }) {
+    return post('config', payload);
   },
 };
 

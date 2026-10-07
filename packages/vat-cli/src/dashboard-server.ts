@@ -8,8 +8,11 @@ import path from 'node:path';
 import {
   Hub,
   loadCard,
+  loadConfig,
+  parseCharter,
   readLedgerDay,
   readEvents,
+  renderCharter,
   resolvePaths,
   scanInbox,
   summarize,
@@ -319,6 +322,41 @@ export function startDashboardServer(
         });
         const cleanup = startEventStream(ctx, day, res);
         req.on('close', cleanup);
+        return;
+      }
+
+      // ---- 配置读写 (驾驶舱内联管理 vat.config.json + 章程) ----
+      if (url.pathname === '/api/config') {
+        if (req.method === 'GET') {
+          sendJson(res, 200, {
+            config: ctx.config,
+            charter: { data: ctx.charter.data, body: ctx.charter.body },
+          });
+          return;
+        }
+        if (req.method === 'POST') {
+          try {
+            const body = JSON.parse((await readBody(req)) || '{}') as {
+              config?: Record<string, unknown>;
+              charterData?: Record<string, unknown>;
+            };
+            if (body.config && typeof body.config === 'object') {
+              fs.writeFileSync(ctx.paths.configFile, JSON.stringify(body.config, null, 2) + '\n', 'utf8');
+              ctx.config = loadConfig(ctx.paths.configFile);
+            }
+            if (body.charterData && typeof body.charterData === 'object') {
+              const nextData = body.charterData as unknown as Charter['data'];
+              const md = renderCharter({ data: nextData, body: ctx.charter.body });
+              fs.writeFileSync(ctx.paths.charterFile, md, 'utf8');
+              ctx.charter = parseCharter(fs.readFileSync(ctx.paths.charterFile, 'utf8'));
+            }
+            sendJson(res, 200, { ok: true });
+          } catch (err) {
+            sendJson(res, 400, { error: (err as Error).message });
+          }
+          return;
+        }
+        sendJson(res, 405, { error: 'method not allowed' });
         return;
       }
       if (url.pathname.startsWith('/api/') && req.method === 'POST') {

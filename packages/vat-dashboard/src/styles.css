@@ -6,15 +6,31 @@
   --text-primary: #fbfaf7;
   --text-secondary: rgba(251, 250, 247, 0.62);
   --text-tertiary: rgba(251, 250, 247, 0.38);
-  --bronze: #c5a059;
+  --accent: #c5a059;
+  --accent-soft: rgba(197, 160, 89, 0.35);
+  --accent-faint: rgba(197, 160, 89, 0.12);
+  --bronze: var(--accent);
   --hairline: rgba(251, 250, 247, 0.08);
-  --hairline-accent: rgba(197, 160, 89, 0.35);
+  --hairline-accent: var(--accent-soft);
   --danger: #e36868;
   --warn: #d9b36a;
   --ok: #7fbf8e;
+  --mask: rgba(5, 6, 8, 0.72);
   --serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
   --mono: 'JetBrains Mono', Consolas, 'Courier New', monospace;
   --sans: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+/* 浅色主题覆盖 (accent 由 JS 注入 --accent 变量, 此处只翻背景/文字) */
+[data-theme='light'] {
+  --bg-canvas: #f4f2ec;
+  --bg-surface: #ffffff;
+  --bg-elevated: #faf8f3;
+  --text-primary: #1c1b18;
+  --text-secondary: rgba(28, 27, 24, 0.66);
+  --text-tertiary: rgba(28, 27, 24, 0.42);
+  --hairline: rgba(28, 27, 24, 0.1);
+  --mask: rgba(20, 18, 14, 0.42);
 }
 
 * {
@@ -315,7 +331,7 @@ body {
 }
 .budget-fill {
   height: 100%;
-  background: linear-gradient(90deg, rgba(197, 160, 89, 0.6), var(--bronze));
+  background: linear-gradient(90deg, var(--accent-soft), var(--accent));
 }
 .ledger-grid {
   display: grid;
@@ -343,7 +359,7 @@ body {
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(5, 6, 8, 0.72);
+  background: var(--mask);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -509,4 +525,198 @@ body {
   color: var(--text-tertiary);
   font-family: var(--serif);
   font-size: 18px;
+}
+
+/* ---- 主题切换器 ---- */
+.theme-switcher {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.theme-modes {
+  display: flex;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.theme-mode {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  padding: 5px 11px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.theme-mode.active {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+.theme-accents {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.accent-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.accent-dot.active {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--bg-surface);
+}
+
+/* ---- 配置中心 ---- */
+.config {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.config-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.config-bar-left {
+  flex: 1;
+}
+.config-bar-right {
+  display: flex;
+  gap: 10px;
+}
+.config-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.cfg-section {
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+.cfg-section h3 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 17px;
+  margin: 0 0 4px;
+  color: var(--text-primary);
+}
+.cfg-hint {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field.wide {
+  grid-column: 1 / -1;
+}
+.field-label {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+}
+.field input,
+.field select,
+.config textarea {
+  background: var(--bg-canvas);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 8px 10px;
+  font-size: 13px;
+  width: 100%;
+  font-family: var(--sans);
+}
+.field input:focus,
+.config textarea:focus {
+  outline: none;
+  border-color: var(--accent-soft);
+}
+.cfg-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.cfg-card input,
+.cfg-card select {
+  background: var(--bg-canvas);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 8px 10px;
+  font-size: 13px;
+  width: 100%;
+}
+.cfg-card input:focus,
+.cfg-card select:focus {
+  outline: none;
+  border-color: var(--accent-soft);
+}
+.cfg-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.cfg-card-head .icon-btn {
+  margin-left: auto;
+}
+.icon-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.switch input {
+  width: auto;
+}
+.chain-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chain-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.chain-ops {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+.ok {
+  color: var(--ok);
+  font-size: 12px;
+}
+.config-raw {
+  max-height: 70vh;
+  overflow: auto;
 }
