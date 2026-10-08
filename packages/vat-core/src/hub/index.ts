@@ -696,7 +696,37 @@ export class Hub {
 
     // 产出单据: 校验 toRole → 卡点暂扣 或 投递收件箱; 编制外目标 → 死信留证
     const outgoing: Ticket[] = [];
+    let escalatedToUser = false;
     for (const draft of effectiveDrafts) {
+      if (draft.to === 'USER') {
+        // 升级通道: 角色无法自行澄清/无法推进, 请求主程介入。
+        // 单据直投 USER-docs/in (绕过卡点暂扣 — 升级必须到达人), notify 类型经 deliverOutgoing 自动广播通知渠道。
+        const esc = createTicket(
+          {
+            from: role.id,
+            to: 'USER',
+            type: draft.type === 'notify' ? 'notify' : 'notify',
+            card: cardId,
+            source: result.source,
+            title: draft.title,
+            body: draft.body,
+            now: this.now(),
+          },
+          seq.next(this.now())
+        );
+        fs.mkdirSync(paths.mailboxIn('USER'), { recursive: true });
+        this.deliverOutgoing(esc, at);
+        escalatedToUser = true;
+        this.emit({
+          type: 'human_action',
+          severity: 'warning',
+          role: role.id,
+          card: cardId,
+          ticket: esc.id,
+          message: `🔔 ${role.title} 升级请求主程介入: ${draft.title} (已投递 USER-docs/in${esc.type === 'notify' ? ' + 通知渠道广播' : ''})`,
+        }, at);
+        continue;
+      }
       if (!findRole(charter, draft.to)) {
         const rogue = createTicket(
           {
@@ -757,8 +787,8 @@ export class Hub {
       }, at);
     }
 
-    // 停滞检测: 无产出单据且无状态推进 → 流水线将卡死, 显式告警
-    if (outgoing.length === 0 && plan.hops.length === 0 && card.status !== 'done') {
+    // 停滞检测: 无产出单据且无状态推进 → 流水线将卡死, 显式告警 (已升级主程的除外 — 那是预期等待)
+    if (outgoing.length === 0 && plan.hops.length === 0 && card.status !== 'done' && !escalatedToUser) {
       this.emit({
         type: 'warning',
         severity: 'warning',

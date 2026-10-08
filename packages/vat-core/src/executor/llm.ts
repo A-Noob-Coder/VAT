@@ -103,7 +103,8 @@ ${charter.body}
 ${JSON.stringify(ROLE_OUTPUT_JSON_SCHEMA, null, 2)}
 
 字段说明:
-- tickets: 你要投递的下游单据。to 必须是章程在编角色 ID (${charter.data.team.roles.map((r) => r.id).join('/')})。
+- tickets: 你要投递的下游单据。to 必须是章程在编角色 ID (${charter.data.team.roles.map((r) => r.id).join('/')}), 或特殊目标 "USER" (主程)。
+- 澄清升级纪律: 若当前单据信息不足以开工 → 先判断团队内谁可能知道答案, 向该在编角色发 type:"notify" 澄清单 (附上你已知的上下文与具体问题); **仅当没有任何在编角色能回答时**, 才发 {to:"USER", type:"notify"} 升级请求, body 写清: 缺什么信息 / 为什么团队内无人能答 / 给主程的可选项。不要用提问骚扰主程。
 - 单据正文 (body) 要写清规格、验收准则与上下文, 让接收角色无需追问即可开工。
 - memoryUpdates.summaryUpdate: 用第一人称更新你的滚动摘要 (<300 字), 覆盖旧摘要。
 - deliverable: 本轮核心交付物 (PM=spec/PRD, DEV=code, REVIEW=review/审计报告, QA=test/验收报告, OPS=config/部署物)。内容必须完整, 不许写"略"或占位符。
