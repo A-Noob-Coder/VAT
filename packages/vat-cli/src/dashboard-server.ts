@@ -146,8 +146,15 @@ function buildGraph(ctx: DashboardContext, cardId?: string | null) {
     null;
 
   // 席位: USER + 章程编制; active = 持有单据或为卡片当前 owner
+  const userInbox = paths.mailboxIn('USER');
   const seats = [
-    { id: 'USER', title: '主程', pending: 0, active: false, isOwner: false },
+    {
+      id: 'USER',
+      title: '主程',
+      pending: fs.existsSync(userInbox) ? scanInbox(userInbox).length : 0,
+      active: false,
+      isOwner: false,
+    },
     ...charter.data.team.roles.map((r) => ({
       id: r.id,
       title: r.title,

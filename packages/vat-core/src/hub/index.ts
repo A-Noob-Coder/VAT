@@ -430,6 +430,7 @@ export class Hub {
       for (const entry of fs.readdirSync(paths.ticketsDir)) {
         const match = /^(.+)-docs$/.exec(entry);
         if (!match?.[1] || rosterIds.has(match[1])) continue;
+        if (match[1] === 'USER') continue; // 主程信箱: 升级单据在此等人处理, 不派发也不死信
         const inbox = path.join(paths.ticketsDir, entry, 'in');
         if (!fs.existsSync(inbox)) continue;
         for (const ticket of scanInbox(inbox)) {
